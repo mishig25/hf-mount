@@ -77,12 +77,56 @@ Once installed, re-run your command, e.g.:
 EOF
 }
 
+# --- Should we rewrite "hf-mount" -> "hf mount" in the output? ---------------
+# Only for help/usage/version text, so the displayed command matches how it was
+# invoked. Real commands (start/stop/status) are exec'd untouched to preserve
+# streaming, exit codes, and signal handling.
+# Rewrite the bare `hf-mount` command name to `hf mount`, while leaving the
+# backend binary names `hf-mount-nfs` / `hf-mount-fuse` intact (they are real,
+# separately invokable executables).
+rewrite_cmd_name() {
+  sed -e 's/hf-mount-nfs/@@HFM_NFS@@/g' \
+      -e 's/hf-mount-fuse/@@HFM_FUSE@@/g' \
+      -e 's/hf-mount/hf mount/g' \
+      -e 's/@@HFM_NFS@@/hf-mount-nfs/g' \
+      -e 's/@@HFM_FUSE@@/hf-mount-fuse/g'
+}
+
+is_help_invocation() {
+  [ "$#" -eq 0 ] && return 0
+  case "$1" in
+    help) return 0 ;;
+  esac
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      -h|--help|-V|--version) return 0 ;;
+    esac
+  done
+  return 1
+}
+
 # --- Dispatch ----------------------------------------------------------------
 REAL_BIN="$(find_real_hf_mount || true)"
 
 if [ -z "${REAL_BIN:-}" ]; then
   print_install_help
   exit 127
+fi
+
+if is_help_invocation "$@"; then
+  # Capture stdout/stderr separately, rewrite the command name, re-emit on the
+  # original streams, and preserve the binary's exit code.
+  err_file="$(mktemp)"
+  set +e
+  out="$("$REAL_BIN" "$@" 2>"$err_file")"
+  status=$?
+  set -e
+  err="$(cat "$err_file")"
+  rm -f "$err_file"
+  [ -n "$out" ] && printf '%s\n' "$out" | rewrite_cmd_name
+  [ -n "$err" ] && printf '%s\n' "$err" | rewrite_cmd_name >&2
+  exit "$status"
 fi
 
 exec "$REAL_BIN" "$@"
