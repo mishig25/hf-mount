@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#
+# hf-mount — Hugging Face CLI extension
+#
+# Lets you run `hf mount ...` as a thin wrapper around the standalone
+# `hf-mount` binary (https://github.com/huggingface/hf-mount).
+#
+# `hf` invokes this script as `hf mount <args...>` and forwards every extra
+# argument here. We locate the real `hf-mount` binary (NOT this script) and
+# exec it with the same arguments.
+#
+set -euo pipefail
+
+# --- Resolve this script's own canonical path -------------------------------
+# Needed so we never accidentally re-invoke ourselves (both are "hf-mount").
+self_source="${BASH_SOURCE[0]}"
+while [ -h "$self_source" ]; do
+  dir="$(cd -P "$(dirname "$self_source")" >/dev/null 2>&1 && pwd)"
+  self_source="$(readlink "$self_source")"
+  [[ "$self_source" != /* ]] && self_source="$dir/$self_source"
+done
+SELF="$(cd -P "$(dirname "$self_source")" >/dev/null 2>&1 && pwd)/$(basename "$self_source")"
+
+# --- Find the real `hf-mount` binary ----------------------------------------
+# Search PATH plus a few common install locations, skipping this script.
+find_real_hf_mount() {
+  local candidate
+  local -a search_dirs=()
+
+  # Split PATH into search dirs.
+  local IFS=':'
+  for candidate in $PATH; do
+    [ -n "$candidate" ] && search_dirs+=("$candidate")
+  done
+  IFS=$' \t\n'
+
+  # Common locations Homebrew / cargo / manual installs land in.
+  search_dirs+=(
+    "/opt/homebrew/bin"
+    "/usr/local/bin"
+    "/usr/bin"
+    "$HOME/.cargo/bin"
+    "$HOME/.local/bin"
+  )
+
+  for dir in "${search_dirs[@]}"; do
+    candidate="$dir/hf-mount"
+    [ -x "$candidate" ] || continue
+    # Resolve candidate's canonical path and make sure it isn't us.
+    local resolved
+    resolved="$(cd -P "$(dirname "$candidate")" >/dev/null 2>&1 && pwd)/hf-mount"
+    [ "$resolved" = "$SELF" ] && continue
+    echo "$candidate"
+    return 0
+  done
+  return 1
+}
+
+# --- Print install help when the binary is missing --------------------------
+print_install_help() {
+  cat >&2 <<'EOF'
+Error: the `hf-mount` binary was not found on your system.
+
+`hf mount` is a thin wrapper around the standalone hf-mount tool. Install it:
+
+  Homebrew (macOS / Linux):
+      brew install hf-mount
+
+  Prebuilt binaries:
+      https://github.com/huggingface/hf-mount/releases
+
+  From source (Rust 1.89+):
+      cargo install --git https://github.com/huggingface/hf-mount
+
+Once installed, re-run your command, e.g.:
+      hf mount start repo openai/gpt-oss-20b /tmp/model
+EOF
+}
+
+# --- Dispatch ----------------------------------------------------------------
+REAL_BIN="$(find_real_hf_mount || true)"
+
+if [ -z "${REAL_BIN:-}" ]; then
+  print_install_help
+  exit 127
+fi
+
+exec "$REAL_BIN" "$@"
