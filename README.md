@@ -21,21 +21,6 @@ This installs a shell-script extension. It does **not** bundle the `hf-mount`
 binary — that is installed separately (see below). After installing, `hf mount`
 forwards every argument straight to the real `hf-mount` binary.
 
-### Install the underlying `hf-mount` binary
-
-```bash
-# Homebrew (macOS / Linux)
-brew install hf-mount
-
-# or grab a prebuilt binary
-# https://github.com/huggingface/hf-mount/releases
-
-# or build from source (Rust 1.89+)
-cargo install --git https://github.com/huggingface/hf-mount
-```
-
-If the binary isn't found, `hf mount` prints these instructions and exits.
-
 ## How it works
 
 `hf` dispatches the unknown subcommand `hf mount …` to the executable
