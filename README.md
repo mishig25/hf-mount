@@ -14,7 +14,7 @@ hf mount stop /tmp/model
 ## Install
 
 ```bash
-hf extensions install <your-username>/hf-mount
+hf extensions install mishig25/hf-mount
 ```
 
 This installs a shell-script extension. It does **not** bundle the `hf-mount`
